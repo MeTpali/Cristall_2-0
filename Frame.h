@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 
+
 class Frame : public QWidget
 {
     Q_OBJECT
@@ -40,6 +41,7 @@ public:
     void setOptionFill(bool value) { optionFill = value; };
     int getCanvasWidth();
     int getCanvasHeight();
+
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -74,6 +76,10 @@ private:
     {
         int x, y;
         double z;
+    };
+    struct polyZ {
+        int idx;  // Индекс полигона
+        float z;  // Глубина полигона
     };
     QVector3D lightCoord;
     QVector<QVector<int>> dataPolygons;
