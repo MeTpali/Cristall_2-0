@@ -13,6 +13,9 @@
 #include <QRegularExpression>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QPainterPath>
+#include <algorithm>
+#include <initializer_list>
 
 class Frame : public QWidget
 {
@@ -54,7 +57,6 @@ protected:
         }
     }
     void mouseMoveEvent(QMouseEvent *) override;
-
 private:
     QString pathPolygons;
     QString pathPoints;

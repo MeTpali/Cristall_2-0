@@ -543,203 +543,158 @@ int Frame::getCanvasHeight(){
     return heightCanvas;
 }
 
-
-
-
-
-
-
-
-// Структура для хранения нормали полигона
-struct PolygonNormal {
-    QVector3D normal;
+// Структура для хранения треугольника
+struct Triangle {
+    QVector3D v0;
+    QVector3D v1;
+    QVector3D v2;
 };
 
-// Структура для хранения нормали вершины и её интенсивности
-struct VertexInfo {
-    QVector3D normal;
-    double intensity;
-};
+// Функция триангуляции выпуклого многоугольника
+QVector<Triangle> triangulateConvexPolygon(const QVector<QVector3D> &polygon) {
+    QVector<Triangle> triangles;
+    if (polygon.size() < 3) return triangles; // Некорректный многоугольник
 
-// Структура для хранения информации о Z-координате полигона для сортировки
-struct polyZ {
-    int idx;   // Индекс полигона
-    double z;  // Средняя Z-координата полигона
-};
-
-// Предполагается, что данные полигонов и точек определены следующим образом:
-extern QVector<QVector<int>> dataPolygons;     // Каждый полигон представлен списком индексов вершин
-extern QVector<QVector3D> dataPoints;          // Список точек (вершин) в пространстве
-
-// Направление источника света (нормализованный вектор)
-const QVector3D lightDir(0.0, 0.0, -1.0); // Пример: свет идёт вдоль отрицательной оси Z
-
-// Функция для вычисления нормали полигона по трём его вершинам
-QVector3D computePolygonNormal(const QVector3D& a, const QVector3D& b, const QVector3D& c) {
-    QVector3D edge1 = b - a;
-    QVector3D edge2 = c - a;
-    QVector3D normal = QVector3D::crossProduct(edge1, edge2).normalized();
-    return normal;
+    // Используем первую вершину как базовую
+    QVector3D base = polygon[0];
+    for (int i = 1; i < polygon.size() - 1; ++i) {
+        Triangle tri;
+        tri.v0 = base;
+        tri.v1 = polygon[i];
+        tri.v2 = polygon[i + 1];
+        triangles.append(tri);
+    }
+    return triangles;
 }
 
-// Функция для вычисления интенсивности освещения в вершине
-double computeIntensity(const QVector3D& normal, const QVector3D& lightDirection) {
-    // Интенсивность = косинус угла между нормалью и направлением света
-    double intensity = QVector3D::dotProduct(normal, lightDirection);
-    // Ограничиваем значение интенсивности от 0 до 1
-    return std::max(0.0, std::min(1.0, intensity));
+QColor getColorByZ(double z, double minZ, double maxZ)
+{
+    // Нормализуем Z в диапазон [0, 1]
+    double normalizedZ = (z - minZ) / (maxZ - minZ);
+    normalizedZ = std::clamp(normalizedZ, 0.0, 1.0); // Ограничиваем значения
+
+    // Инвертируем нормализованное значение, чтобы ближайшие были светлее
+    double brightness = normalizedZ;
+
+    // Преобразуем яркость в оттенки серого
+    int gray = static_cast<int>(brightness * 255);
+    return QColor(gray, gray, gray);
 }
 
-// Функция для проверки, находится ли точка внутри треугольника с использованием барицентрических координат
-bool pointInTriangle(double px, double py,
-                     double x0, double y0,
-                     double x1, double y1,
-                     double x2, double y2,
-                     double& u, double& v, double& w) {
+void colorPixel(int x, int y, double z, QImage &image, QVector<QVector<double>> &zBuffer, double minZ, double maxZ)
+{
+    // Проверяем границы экрана
+    if (x < 0 || x >= image.width() || y < 0 || y >= image.height())
+        return;
+
+    // Проверяем Z-буфер
+    if (z > zBuffer[x][y])
+    {
+        zBuffer[x][y] = z;
+        QColor color = getColorByZ(z, minZ, maxZ);
+        image.setPixelColor(x, y, color);
+    }
+}
+
+bool isPointInTriangle(double px, double py, const Triangle &triangle, double &u, double &v, double &w)
+{
+    double x0 = triangle.v0.x();
+    double y0 = triangle.v0.y();
+    double x1 = triangle.v1.x();
+    double y1 = triangle.v1.y();
+    double x2 = triangle.v2.x();
+    double y2 = triangle.v2.y();
+
     double denom = (y1 - y2)*(x0 - x2) + (x2 - x1)*(y0 - y2);
-    if (std::abs(denom) < 1e-6) return false; // Треугольник вырожден
+    if (std::abs(denom) < 1e-9)
+        return false;
 
     u = ((y1 - y2)*(px - x2) + (x2 - x1)*(py - y2)) / denom;
     v = ((y2 - y0)*(px - x2) + (x0 - x2)*(py - y2)) / denom;
-    w = 1.0 - u - v;
+    w = 1 - u - v;
 
     return (u >= 0) && (v >= 0) && (w >= 0);
 }
 
-// Основная функция отрисовки с методом Гуро
-void Frame::drawFigureGuro(QPainter &painter)
-{
 
-    // Создаём QImage для прямого доступа к пикселям
-    QImage image(widthCanvas, heightCanvas, QImage::Format_RGB32);
-    image.fill(Qt::white); // Заполняем белым фоном
 
-    // Количество полигонов
-    int numPolygons = dataPolygons.size();
+    // Функция отрисовки фигур с по-пиксельным закрашиванием
+    void Frame::drawFigureGuro(QPainter &painter)
+    {
 
-    // Вектор для хранения нормалей полигонов
-    QVector<PolygonNormal> polygonNormals(numPolygons);
+          QVector<QVector<double>> zBuffer;
+           screen.fill(Qt::white);
 
-    // Шаг 1: Вычисление нормалей к каждому полигону
-    for (int i = 0; i < numPolygons; ++i) {
-        const QVector<int>& polygon = dataPolygons[i];
-        // Предполагаем, что полигоны треугольные
-        if (polygon.size() < 3) continue; // Пропускаем некорректные полигоны
+           zBuffer.resize(widthCanvas, QVector<double>(heightCanvas, -std::numeric_limits<double>::infinity()));
 
-        QVector3D a = dataPoints[polygon[0]];
-        QVector3D b = dataPoints[polygon[1]];
-        QVector3D c = dataPoints[polygon[2]];
+           // Найдём минимальные и максимальные значения Z среди всех полигонов
+           double minZ = std::numeric_limits<double>::max();
+           double maxZ = std::numeric_limits<double>::lowest();
 
-        polygonNormals[i].normal = computePolygonNormal(a, b, c);
-    }
+           // Создадим вектор треугольников
+           QVector<Triangle> triangles;
 
-    // Шаг 2: Вычисление нормалей в вершинах путём усреднения нормалей смежных полигонов
-    int numVertices = dataPoints.size();
-    QVector<VertexInfo> vertexInfos(numVertices, VertexInfo{QVector3D(0,0,0), 0.0});
+           for (const auto &poly : dataPolygons) {
+               if (poly.size() < 3)
+                   continue; // Пропускаем некорректные полигоны
 
-    // Считаем суммы нормалей для каждой вершины
-    for (int i = 0; i < numPolygons; ++i) {
-        const QVector<int>& polygon = dataPolygons[i];
-        for (int vertexIdx : polygon) {
-            vertexInfos[vertexIdx].normal += polygonNormals[i].normal;
-        }
-    }
+               // Собираем вершины полигона
+               QVector<QVector3D> polygonVertices;
+               for (int idx : poly) {
+                   // Смещаем координаты относительно центра канвы
+                   QVector3D point = dataPoints[idx];
+                   point.setX(point.x() + widthCanvas / 2.0);
+                   point.setY(point.y() + heightCanvas / 2.0);
+                   polygonVertices.append(point);
+               }
 
-    // Усредняем нормали и нормализуем их
-    for (int i = 0; i < numVertices; ++i) {
-        if (vertexInfos[i].normal.length() != 0)
-            vertexInfos[i].normal = vertexInfos[i].normal.normalized();
-    }
-    // Шаг 3: Вычисление интенсивности освещения в каждой вершине
-        for (int i = 0; i < numVertices; ++i) {
-            vertexInfos[i].intensity = computeIntensity(vertexInfos[i].normal, lightDir);
-        }
+               // Триангулируем многоугольник (предполагается выпуклый)
+               QVector<Triangle> tris = triangulateConvexPolygon(polygonVertices);
+               triangles.append(tris);
 
-        // Шаг 4: Сортировка полигонов по глубине (для правильного наложения)
-        QVector<polyZ> ZCoords(numPolygons);
-        for (int i = 0; i < numPolygons; ++i) {
-            // Используем среднюю Z-координату полигона для сортировки
-            const QVector<int>& polygon = dataPolygons[i];
-            double avgZ = 0.0;
-            for (int vertexIdx : polygon) {
-                avgZ += dataPoints[vertexIdx].z();
-            }
-            avgZ /= polygon.size();
-            ZCoords[i] = polyZ{ i, avgZ };
-        }
+               // Обновляем minZ и maxZ
+               for (const auto &tri : tris) {
+                minZ = *std::min_element(
+                    std::initializer_list<double>{minZ, tri.v0.z(), tri.v1.z(), tri.v2.z()}.begin(),
+                    std::initializer_list<double>{minZ, tri.v0.z(), tri.v1.z(), tri.v2.z()}.end());
 
-        // Сортируем полигоны по возрастанию средней Z (дальние рисуются первыми)
-        std::sort(ZCoords.begin(), ZCoords.end(),
-                  [](const polyZ& a, const polyZ& b) -> bool {
-                      return a.z < b.z; // Дальние полигоны имеют меньшую Z
-                  });
+                maxZ = *std::max_element(
+                    std::initializer_list<double>{maxZ, tri.v0.z(), tri.v1.z(), tri.v2.z()}.begin(),
+                std::initializer_list<double>{maxZ, tri.v0.z(), tri.v1.z(), tri.v2.z()}.end());
 
-        // Проход по полигонам в отсортированном порядке
-        for (const polyZ& poly : ZCoords) {
-            const QVector<int>& polygon = dataPolygons[poly.idx];
-            if (polygon.size() < 3) continue; // Пропускаем некорректные полигоны
+               }
+           }
 
-            // Получаем вершины полигона и их интенсивности
-            QVector<QPointF> screenPoints;
-            QVector<double> intensities;
-            for (int vertexIdx : polygon) {
-                QVector3D point = dataPoints[vertexIdx];
-                // Преобразуем координаты в экранные (сдвиг по центру)
-                double x = point.x() + widthCanvas / 2.0;
-                double y = point.y() + heightCanvas / 2.0;
-                screenPoints.append(QPointF(x, y));
-                intensities.append(vertexInfos[vertexIdx].intensity);
-            }
+           // Растеризация каждого треугольника
+           for (const auto &tri : triangles) {
+               // Определяем границы треугольника
+               int minX = std::floor(std::min({tri.v0.x(), tri.v1.x(), tri.v2.x()}));
+               int maxX = std::ceil(std::max({tri.v0.x(), tri.v1.x(), tri.v2.x()}));
+               int minY = std::floor(std::min({tri.v0.y(), tri.v1.y(), tri.v2.y()}));
+               int maxY = std::ceil(std::max({tri.v0.y(), tri.v1.y(), tri.v2.y()}));
 
-            // Предполагаем, что полигоны треугольные
-            if (polygon.size() != 3) continue; // Для простоты
+               // Ограничиваем границы экрана
+               minX = std::max(minX, 0);
+               maxX = std::min(maxX, static_cast<int>(widthCanvas) - 1);
+               minY = std::max(minY, 0);
+               maxY = std::min(maxY, static_cast<int>(heightCanvas) - 1);
 
-            // Извлекаем координаты вершин
-            double x0 = screenPoints[0].x();
-            double y0 = screenPoints[0].y();
-            double x1 = screenPoints[1].x();
-            double y1 = screenPoints[1].y();
-            double x2 = screenPoints[2].x();
-            double y2 = screenPoints[2].y();
 
-            // Извлекаем интенсивности вершин
-            double I0 = intensities[0];
-            double I1 = intensities[1];
-            double I2 = intensities[2];
+               // Проходим по каждому пикселю в ограничивающем прямоугольнике
+               for (int y = minY; y <= maxY; y++) {
+                   for (int x = minX; x <= maxX; x++) {
+                       double u, v, w;
+                       // Используем центр пикселя для проверки принадлежности
+                       if (isPointInTriangle(x + 0.5, y + 0.5, tri, u, v, w)) {
+                           // Интерполируем Z
+                           double z = u * tri.v0.z() + v * tri.v1.z() + w * tri.v2.z();
+                           // Закрашиваем пиксель
+                           colorPixel(x, y, z, screen, zBuffer, minZ, maxZ);
+                       }
+                   }
+               }
+           }
 
-            // Вычисляем bounding box треугольника
-            double minX = std::min({x0, x1, x2});
-            double maxX = std::max({x0, x1, x2});
-            double minY = std::min({y0, y1, y2});
-            double maxY = std::max({y0, y1, y2});
-
-            // Ограничиваем bounding box размерами канвы
-            minX = std::max(0.0, std::floor(minX));
-            maxX = std::min(static_cast<double>(widthCanvas - 1), std::ceil(maxX));
-            minY = std::max(0.0, std::floor(minY));
-            maxY = std::min(static_cast<double>(heightCanvas - 1), std::ceil(maxY));
-
-            // Обходим каждый пиксель в bounding box
-            for (int y = static_cast<int>(minY); y <= static_cast<int>(maxY); ++y) {
-                for (int x = static_cast<int>(minX); x <= static_cast<int>(maxX); ++x) {
-                    double u, v, w;
-                    if (pointInTriangle(x + 0.5, y + 0.5, x0, y0, x1, y1, x2, y2, u, v, w)) {
-                        // Интерполируем интенсивность
-                        double I = u * I0 + v * I1 + w * I2;
-                        I = std::max(0.0, std::min(1.0, I)); // Ограничиваем [0,1]
-
-                        // Преобразуем интенсивность в цвет (градация серого)
-                        int colorValue = static_cast<int>(I * 255);
-                        colorValue = std::max(0, std::min(255, colorValue));
-                        QColor color(colorValue, colorValue, colorValue);
-
-                        // Устанавливаем цвет пикселя
-                        image.setPixelColor(x, y, color);
-                    }
-                }
-            }
-        }
-
-        // Отображаем итоговое изображение
-        painter.drawImage(painter.viewport(), image);
+           // Отображаем готовое изображение
+           painter.drawImage(0, 0, screen);
     }
