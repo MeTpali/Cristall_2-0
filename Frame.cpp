@@ -45,9 +45,11 @@ void Frame::defaultDrawFigure(QPainter &painter)
     }
 }
 
+
 void Frame::drawFigureZBuffer(QPainter &painter)
 {
 }
+
 
 void Frame::drawFigureVeyler(QPainter &painter)
 {
@@ -423,73 +425,4 @@ int Frame::getCanvasHeight(){
     return heightCanvas;
 }
 
-
-
-
-
-
-
-
-
-QMatrix4x4 Frame::getModelMatrix()
-{
-    QMatrix4x4 model;
-    model.setToIdentity();
-    model.translate(modelTranslateX, modelTranslateY, modelTranslateZ);
-    model.rotate(modelRotateX, 1.0f, 0.0f, 0.0f);
-    model.rotate(modelRotateY, 0.0f, 1.0f, 0.0f);
-    model.rotate(modelRotateZ, 0.0f, 0.0f, 1.0f);
-    model.scale(modelScale);
-    return model;
-}
-
-QMatrix4x4 Frame::getViewMatrix()
-{
-    QMatrix4x4 view;
-    view.setToIdentity();
-    view.lookAt(cameraPos, cameraTarget, cameraUp);
-    return view;
-}
-
-QMatrix4x4 Frame::getProjectionMatrix()
-{
-    QMatrix4x4 proj;
-    proj.setToIdentity();
-    // Перспективная проекция: угол 60 градусов, соотношение сторон width/height, ближняя плоскость 0.1, дальняя 100
-    float aspect = float(widthCanvas) / float(heightCanvas);
-    proj.perspective(60.0f, aspect, 0.1f, 100.0f);
-    return proj;
-}
-QVector<QVector3D> Frame::applyTransform(const QVector<QVector3D> &points)
-{
-    // Матрицы
-    QMatrix4x4 model = getModelMatrix();
-    QMatrix4x4 view = getViewMatrix();
-    QMatrix4x4 proj = getProjectionMatrix();
-
-    QMatrix4x4 mvp = proj * view * model;
-
-    QVector<QVector3D> transformed;
-    transformed.reserve(points.size());
-    for (const auto &p : points)
-    {
-        QVector4D v(p, 1.0f);
-        QVector4D vt = mvp * v;
-        // Перспективное деление
-        if (!qFuzzyIsNull(vt.w()))
-        {
-            vt.setX(vt.x() / vt.w());
-            vt.setY(vt.y() / vt.w());
-            vt.setZ(vt.z() / vt.w());
-        }
-
-        // Преобразование в координаты экрана
-        float screenX = (vt.x() * 0.5f + 0.5f) * widthCanvas;
-        float screenY = (1.0f - (vt.y() * 0.5f + 0.5f)) * heightCanvas;
-        float screenZ = vt.z(); // z для Z-буфера
-
-        transformed.append(QVector3D(screenX, screenY, screenZ));
-    }
-    return transformed;
-}
 
