@@ -141,10 +141,11 @@ void Cristall::slotZBuffer(int check)
         canvas->setOptionDraw(1);
         ui->checkBoxZBuffer->setCheckState(Qt::Checked);
         ui->checkBoxVeyler->setCheckState(Qt::Unchecked);
+        ui->checkBoxGuro->setCheckState(Qt::Unchecked);
     }
     else
     {
-        if (!ui->checkBoxVeyler->isChecked())
+        if (!ui->checkBoxVeyler->isChecked() && !ui->checkBoxGuro->isChecked())
         {
             canvas->setOptionDraw(0);
         }
@@ -157,11 +158,12 @@ void Cristall::slotVeyler(int check)
     {
         canvas->setOptionDraw(2);
         ui->checkBoxZBuffer->setCheckState(Qt::Unchecked);
+        ui->checkBoxGuro->setCheckState(Qt::Unchecked);
         ui->checkBoxVeyler->setCheckState(Qt::Checked);
     }
     else
     {
-        if (!ui->checkBoxZBuffer->isChecked())
+        if (!ui->checkBoxZBuffer->isChecked() && !ui->checkBoxGuro->isChecked())
         {
             canvas->setOptionDraw(0);
         }
@@ -172,11 +174,17 @@ void Cristall::slotGuro(int check)
 {
     if (check == 2)
     {
-        canvas->setOptionFill(true);
+        canvas->setOptionDraw(3);
+        ui->checkBoxZBuffer->setCheckState(Qt::Unchecked);
+        ui->checkBoxVeyler->setCheckState(Qt::Unchecked);
+        ui->checkBoxGuro->setCheckState(Qt::Checked);
     }
     else
     {
-        canvas->setOptionFill(false);
+        if (!ui->checkBoxZBuffer->isChecked() && !ui->checkBoxVeyler->isChecked())
+        {
+            canvas->setOptionDraw(0);
+        }
     }
     canvas->update();
 }

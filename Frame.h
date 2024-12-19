@@ -82,6 +82,7 @@ private:
     void defaultDrawFigure(QPainter &painter);
     void drawFigureZBuffer(QPainter &painter);
     void drawFigureVeyler(QPainter &painter);
+    void drawFigureGuro(QPainter &painter);
     bool fillingDataPolygons();
     bool fillingDataPoints();
     void rotateZLeft();
