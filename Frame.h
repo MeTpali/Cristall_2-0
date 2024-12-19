@@ -16,6 +16,8 @@
 #include <QPainterPath>
 #include <algorithm>
 #include <initializer_list>
+#include <cmath>
+#include <limits>
 
 class Frame : public QWidget
 {
@@ -44,7 +46,6 @@ public:
     int getCanvasWidth();
     int getCanvasHeight();
 
-
 protected:
     void paintEvent(QPaintEvent *) override;
     void mousePressEvent(QMouseEvent *event) override
@@ -52,11 +53,12 @@ protected:
         if (event->button() == Qt::LeftButton)
         {
             _p = event->pos();
-            rotationX = _p.x() - widthCanvas/2;
-            rotationY = _p.y() - heightCanvas/2;
+            rotationX = _p.x() - widthCanvas / 2;
+            rotationY = _p.y() - heightCanvas / 2;
         }
     }
     void mouseMoveEvent(QMouseEvent *) override;
+
 private:
     QString pathPolygons;
     QString pathPoints;
