@@ -21,7 +21,7 @@ void Frame::paintEvent(QPaintEvent *event)
         defaultDrawFigure(painter);
         break;
     case 1:
-        drawFigureZBuffer(painter);
+        drawFigureVeyler(painter);
         break;
     case 2:
         drawFigureVeyler(painter);

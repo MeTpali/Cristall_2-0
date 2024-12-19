@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <initializer_list>
 
+
 class Frame : public QWidget
 {
     Q_OBJECT
