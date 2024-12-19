@@ -14,7 +14,6 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 
-
 class Frame : public QWidget
 {
     Q_OBJECT
@@ -77,10 +76,6 @@ private:
         int x, y;
         double z;
     };
-    struct polyZ {
-        int idx;  // Индекс полигона
-        float z;  // Глубина полигона
-    };
     QVector3D lightCoord;
     QVector<QVector<int>> dataPolygons;
     QVector<QVector3D> dataPoints;
@@ -94,5 +89,7 @@ private:
     void calculate(QMatrix4x4 &);
     void fillPolygon(int, QVector<intCoord> &);
     void customLine(int, intCoord &, intCoord &, QMap<int, QVector<intCoord>> &);
+    QVector3D computePolygonZ(const QVector<int> &polygon);
+    QPointF getIntersection(const QPointF &p1, const QPointF &p2, const QPointF &clip1, const QPointF &clip2);
 };
 #endif

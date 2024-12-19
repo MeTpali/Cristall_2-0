@@ -45,16 +45,131 @@ void Frame::defaultDrawFigure(QPainter &painter)
     }
 }
 
-
 void Frame::drawFigureZBuffer(QPainter &painter)
 {
+    screen.fill(QColor(Qt::white).rgb());
+    for (uint x = 0; x < widthCanvas; x++)
+    {
+        for (uint y = 0; y < heightCanvas; y++)
+        {
+            buffFrame[x][y] = 0;
+            buffZ[x][y] = -1000;
+        }
+    }
+
+    for (int i = 0; i < dataPolygons.size(); i++)
+    {
+        QVector<intCoord> points;
+        for (int j = 0; j < dataPolygons[i].size(); j++)
+        {
+            points.push_back({int(dataPoints[dataPolygons[i][j]].x() + widthCanvas/2 + 0.5),
+                              int(dataPoints[dataPolygons[i][j]].y() + heightCanvas/2 + 0.5),
+                              dataPoints[dataPolygons[i][j]].z()});
+        }
+
+        fillPolygon(i + 1, points);
+    }
+
+    painter.drawImage(1, 1, screen);
 }
 
+// Функция для вычисления Z-координаты точки (x, y) на плоскости, заданной тремя точками a, b, c
+double getPlaneZCoord(double x, double y, const QVector3D& a, const QVector3D& b, const QVector3D& c)
+{
+    // Векторы на плоскости
+    QVector3D AB = b - a;
+    QVector3D AC = c - a;
+
+    // Нормаль к плоскости
+    QVector3D normal = QVector3D::crossProduct(AB, AC);
+
+    // Проверка, чтобы нормаль не была параллельна оси Z (избегаем деления на ноль)
+    if (std::abs(normal.z()) < 1e-7)
+    {
+        // Плоскость параллельна оси Z, возвращаем большое отрицательное значение
+        return -1e9;
+    }
+
+    // Уравнение плоскости: Ax + By + Cz + D = 0
+    double A = normal.x();
+    double B = normal.y();
+    double C = normal.z();
+    double D = -QVector3D::dotProduct(normal, a);
+
+    // Вычисляем Z для заданных X и Y
+    double z = (-A * x - B * y - D) / C;
+    return z;
+}
+
+// Структура для хранения индекса полигона и его средней Z-координаты
+struct PolyZ
+{
+    int idx;       // Индекс полигона
+    double avgZ;   // Средняя Z-координата полигона
+};
 
 void Frame::drawFigureVeyler(QPainter &painter)
 {
+    // Очищаем буфер вывода цветом белого фона
+    screen.fill(QColor(Qt::white).rgb());
+    QBrush brush(Qt::white); // Задаём синий цвет заливки
+    brush.setStyle(Qt::SolidPattern); // Задаём сплошную заливку
+    painter.setBrush(brush);
 
+    // Создаём вектор структур PolyZ для всех полигонов
+    QVector<PolyZ> ZCoords;
+    ZCoords.reserve(dataPolygons.size());
+
+    // Вычисление средней координаты Z каждого полигона
+    for (size_t i = 0; i < dataPolygons.size(); ++i)
+    {
+        const auto& polygon = dataPolygons[i];
+        double sumZ = 0.0;
+        int count = 0;
+
+        // Суммируем Z-координаты всех вершин полигона
+        for (const auto& pointIdx : polygon)
+        {
+            const QVector3D& point = dataPoints[pointIdx];
+            sumZ += point.z();
+            ++count;
+        }
+
+        double averageZ = (count > 0) ? (sumZ / count) : 0.0;
+
+        ZCoords.push_back(PolyZ{ static_cast<int>(i), averageZ });
+    }
+
+    // Сортируем полигоны по средней Z-координате в порядке убывания (от дальних к ближним)
+    std::sort(ZCoords.begin(), ZCoords.end(),
+              [](const PolyZ& a, const PolyZ& b) -> bool
+              {
+                  return a.avgZ < b.avgZ; // От меньшего к большему (дальние сначала)
+              });
+
+    // Отрисовываем полигоны от дальних к ближним
+    for (const auto& polyZ : ZCoords)
+    {
+        int idx = polyZ.idx;
+        const auto& polygon = dataPolygons[idx];
+
+        // Создаём массив точек для полигона с учётом смещения центра экрана
+        QVector<QPointF> points;
+        points.reserve(polygon.size());
+        for (const auto& pointIdx : polygon)
+        {
+            const QVector3D& point = dataPoints[pointIdx];
+            // Предполагается, что X и Y уже находятся в системе координат экрана
+            QPointF screenPoint(point.x() + widthCanvas / 2.0,
+                                point.y() + heightCanvas / 2.0);
+            points.append(screenPoint);
+        }
+
+        // Отрисовываем текущий полигон
+        painter.drawPolygon(points.data(), points.size());
+    }
 }
+
 
 void Frame::fillPolygon(int idSegment, QVector<intCoord> &points)
 {

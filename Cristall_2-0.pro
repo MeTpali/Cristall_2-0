@@ -11,7 +11,8 @@ CONFIG += c++11
 SOURCES += \
     Cristall.cpp \
     Frame.cpp \
-    main.cpp
+    main.cpp \
+    zbuffer.cpp
 
 HEADERS += \
     Cristall.h \
