@@ -2,9 +2,6 @@
 Frame::Frame(QWidget *parent) : QWidget(parent)
 {
     screen = QImage(widthCanvas, heightCanvas, QImage::Format_ARGB32);
-    lightCoord.setX(widthCanvas / 2);
-    lightCoord.setY(heightCanvas / 2);
-    lightCoord.setZ(50);
 }
 
 void Frame::paintEvent(QPaintEvent *event)
@@ -82,7 +79,6 @@ void Frame::fillPolygon(int idSegment, QVector<intCoord> &points)
     for (int i = 0; i < points.size() - 1; customLine(idSegment, points[i], points[i + 1], boundMap), i++)
         ;
     customLine(idSegment, points.last(), points[0], boundMap);
-    int distance = sqrt(pow((lightCoord.x() - widthCanvas / 2), 2) + pow((lightCoord.y() - heightCanvas / 2), 2) + pow(lightCoord.z(), 2));
     foreach (int key, boundMap.keys())
     {
         QVector<intCoord> value = boundMap.value(key);

@@ -80,7 +80,6 @@ private:
         int x, y;
         double z;
     };
-    QVector3D lightCoord;
     QVector<QVector<int>> dataPolygons;
     QVector<QVector3D> dataPoints;
     void defaultDrawFigure(QPainter &painter);
